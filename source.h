@@ -25,6 +25,7 @@ public:
 
 signals:
     void nextFile(QString fileName);
+    void trayMessage(QString message);
 
 public slots:
     void setPath(const QString &filePath);

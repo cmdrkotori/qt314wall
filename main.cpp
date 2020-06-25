@@ -278,6 +278,11 @@ void Flow::setupSources()
     auto sourceConnect = [this](Sources::FileSource *source) {
         connect(source, &Sources::FileSource::nextFile,
                 this, &Flow::source_nextFile);
+        connect(source, &Sources::FileSource::trayMessage,
+               this, [this](QString msg){
+            if (sysicon)
+                sysicon->showMessage("", msg);
+        });
     };
 
     fileSource = new Sources::FileSource(this);

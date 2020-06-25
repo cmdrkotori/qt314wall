@@ -253,7 +253,8 @@ void WebSource::request_json(QNetworkReply *jsonReply)
 
     QByteArray response = jsonReply->readAll();
     QJsonDocument json = QJsonDocument::fromJson(response);
-    if (json.isNull()) {
+    if (json.isNull() || json.isEmpty() || response == "[]") {
+        emit trayMessage("JSON reply empty or null.\nWas there no images with that tag?");
         FileSource::fetchFile();
         jsonReply->deleteLater();
         return;
