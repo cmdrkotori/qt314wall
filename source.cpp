@@ -8,6 +8,9 @@
 
 using namespace Sources;
 
+static const char msgNoJson[] = "JSON reply empty or null.\nWas there no images with that tag?";
+static const char textNowhereUrl[] = "https://nowhere/page.json?a=b";
+
 //----------------------------------------------------------------------------
 
 FileSource::FileSource(QObject *parent) : QObject(parent)
@@ -162,12 +165,12 @@ static const char userAgent[] =
 WebSource::WebSource(QObject *parent)
     : FileSource(parent)
 {
-
+    title_ = "Unnamed web source";
 }
 
 QString WebSource::shortName()
 {
-    return host;
+    return "WebSource";
 }
 
 QUrl WebSource::source()
@@ -205,16 +208,6 @@ void WebSource::setTitle(const QString &name)
     title_ = name;
 }
 
-void WebSource::setHost(const QString &hostname)
-{
-    host = hostname;
-}
-
-void WebSource::setApiPage(const QString &uri)
-{
-    apiPage = uri;
-}
-
 void WebSource::setTags(const QStringList &tags)
 {
     tags_ = tags;
@@ -222,21 +215,12 @@ void WebSource::setTags(const QStringList &tags)
 
 void WebSource::fetchFile()
 {
-    if (workFolder.isEmpty() || host.isEmpty() || apiPage.isEmpty())
+    if (workFolder.isEmpty())
         return;
 
-    // fetch post info
-    QUrl url("https://nowhere/page.json?a=b");
-    url.setScheme("https");
-    url.setHost(host);
-    url.setPath(apiPage);
-
-    QUrlQuery query;
-    query.addQueryItem("limit", "1");
-    query.addQueryItem("random", "true");
-    query.addQueryItem("tags", tags_.join("+"));
-
-    url.setQuery(query);
+    QUrl url = buildRequestUrl();
+    if (url.isEmpty())
+        return;
 
     QNetworkRequest request;
     request.setHeader(QNetworkRequest::UserAgentHeader, userAgent);
@@ -253,21 +237,16 @@ void WebSource::request_json(QNetworkReply *jsonReply)
 
     QByteArray response = jsonReply->readAll();
     QJsonDocument json = QJsonDocument::fromJson(response);
-    if (json.isNull() || json.isEmpty() || response == "[]") {
-        emit trayMessage("JSON reply empty or null.\nWas there no images with that tag?");
+    bool emptyJson = json.isNull() || json.isEmpty() || response == "[]" || response == "{}";
+    if (!emptyJson)
+        imageUrl = jsonToImageUrl(json, jsonReply->request().url());
+    if (emptyJson || imageUrl.isEmpty()) {
+        emit trayMessage(msgNoJson);
         FileSource::fetchFile();
         jsonReply->deleteLater();
         return;
     }
-    QVariantMap map = json.toVariant().toList().first().toMap();
 
-    QString fileUrlString = map.value("file_url").toString();
-    imageUrl = jsonReply->request().url();
-    if (fileUrlString.startsWith("//")) {
-        imageUrl = imageUrl.scheme() + ":" + fileUrlString;
-    } else {
-        imageUrl = fileUrlString;
-    }
 
     fileReply = qnam.get(QNetworkRequest(imageUrl));
     connect(fileReply, &QNetworkReply::finished,
@@ -295,4 +274,99 @@ bool WebSource::storeTempFile(const QByteArray &data, QString ext)
     if (f.write(data) < 0)
         return false;
     return true;
+}
+
+//----------------------------------------------------------------------------
+
+BooruSource::BooruSource(QObject *parent) : WebSource(parent)
+{
+    host = "nowhere";
+    setTitle("Unnamed booru source");
+}
+
+QString BooruSource::shortName()
+{
+    return host;
+}
+
+void BooruSource::setHost(const QString &hostname)
+{
+    host = hostname;
+}
+
+void BooruSource::setApiPage(const QString &uri)
+{
+    apiPage = uri;
+}
+
+QUrl BooruSource::buildRequestUrl()
+{
+    QUrl url(textNowhereUrl);
+    url.setScheme("https");
+    url.setHost(host);
+    url.setPath(apiPage);
+
+    QUrlQuery query;
+    query.addQueryItem("limit", "1");
+    query.addQueryItem("random", "true");
+    query.addQueryItem("tags", tags_.join("+"));
+
+    url.setQuery(query);
+    return url;
+}
+
+QUrl BooruSource::jsonToImageUrl(const QJsonDocument &document, const QUrl &documentUrl)
+{
+    QVariantMap map = document.toVariant().toList().first().toMap();
+
+    QString fileUrlString = map.value("file_url").toString();
+    QUrl imageUrl = documentUrl;
+    if (fileUrlString.startsWith("//")) {
+        imageUrl = imageUrl.scheme() + ":" + fileUrlString;
+    } else {
+        imageUrl = fileUrlString;
+    }
+    return imageUrl;
+}
+
+//----------------------------------------------------------------------------
+
+WallhavenSource::WallhavenSource(QObject *parent)
+    : WebSource(parent)
+{
+    setTitle("Wallhaven");
+}
+
+QString WallhavenSource::shortName()
+{
+    return "WallhavenSource";
+}
+
+QUrl WallhavenSource::buildRequestUrl()
+{
+    QUrl url(textNowhereUrl);
+    url.setScheme("https");
+    url.setHost("wallhaven.cc");
+    url.setPath("/api/v1/search");
+
+    QUrlQuery query;
+    query.addQueryItem("sorting", "random");
+    query.addQueryItem("q", tags_.join("+"));
+
+    url.setQuery(query);
+    return url;
+}
+
+QUrl WallhavenSource::jsonToImageUrl(const QJsonDocument &document, const QUrl &documentUrl)
+{
+    Q_UNUSED(documentUrl);
+    QVariantMap map = document.toVariant().toMap();
+    QVariantList data = map.value("data", QVariantList()).toList();
+    if (data.isEmpty())
+        return QUrl();
+
+    QVariantMap firstImage = data.first().toMap();
+    QString fileUrlString = firstImage.value("path").toString();
+    return QUrl::fromUserInput(fileUrlString);
+
 }

@@ -100,8 +100,6 @@ signals:
 public slots:
     void setWorkFolder(const QString &folder);
     void setTitle(const QString &name);
-    void setHost(const QString &hostname);
-    void setApiPage(const QString &uri);
     void setTags(const QStringList &tags);
     void fetchFile();
 
@@ -111,14 +109,49 @@ private slots:
 
 protected:
     bool storeTempFile(const QByteArray &data, QString ext);
+    virtual QUrl buildRequestUrl() = 0;
+    virtual QUrl jsonToImageUrl(const QJsonDocument &document, const QUrl &documentUrl) = 0;
 
     QNetworkAccessManager qnam;
     QString workFolder;
+    QUrl source_;
     QString title_;
+    QStringList tags_;
+};
+
+//----------------------------------------------------------------------------
+
+class BooruSource : public WebSource
+{
+    Q_OBJECT
+public:
+    explicit BooruSource(QObject *parent = nullptr);
+    QString shortName();
+
+public slots:
+    void setHost(const QString &hostname);
+    void setApiPage(const QString &uri);
+
+protected:
+    QUrl buildRequestUrl();
+    QUrl jsonToImageUrl(const QJsonDocument &document, const QUrl &documentUrl);
+
     QString host;
     QString apiPage;
-    QUrl source_;
-    QStringList tags_;
+};
+
+//----------------------------------------------------------------------------
+
+class WallhavenSource : public WebSource
+{
+    Q_OBJECT
+public:
+    explicit WallhavenSource(QObject *parent = nullptr);
+    QString shortName();
+
+protected:
+    QUrl buildRequestUrl();
+    QUrl jsonToImageUrl(const QJsonDocument &document, const QUrl &documentUrl);
 };
 
 //----------------------------------------------------------------------------

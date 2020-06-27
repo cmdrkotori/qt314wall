@@ -303,10 +303,15 @@ void Flow::setupSources()
         { "Danbooru", "danbooru.donmai.us", "/posts.json" }
     };
     for (auto &d : data) {
-        auto src = new Sources::WebSource(this);
+        auto src = new Sources::BooruSource(this);
         src->setTitle(d.title);
         src->setHost(d.hostname);
         src->setApiPage(d.apiPage);
+        webSources.append(src);
+        sourceConnect(src);
+    }
+    if (true) {
+        auto src = new Sources::WallhavenSource(this);
         webSources.append(src);
         sourceConnect(src);
     }
